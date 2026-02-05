@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Employee Manager</title>
+    <style>
+        body { font-family: sans-serif; max-width: 600px; margin: 2rem auto; padding: 0 1rem; }
+        input, button { padding: 10px; margin: 5px 0; width: 100%; box-sizing: border-box; }
+        button { background-color: #007bff; color: white; border: none; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+        li { background: #f9f9f9; border-bottom: 1px solid #ddd; padding: 10px; list-style: none; }
+        ul { padding: 0; }
+    </style>
+</head>
+<body>
+    <h1>Employee Manager (Full Stack)</h1>
+    <p>Backend URL: <span style="color:green; font-weight:bold;">https://employee-api-zxoagfut3q-as.a.run.app</span></p>
+    
+    <div style="background: #eee; padding: 20px; border-radius: 8px;">
+        <h3>Add New Employee</h3>
+        <input id="name" placeholder="Name (ชื่อ-นามสกุล)">
+        <input id="pos" placeholder="Position (ตำแหน่ง)">
+        <input id="dept" placeholder="Department (แผนก)">
+        <button onclick="addEmp()">Save Employee</button>
+    </div>
+
+    <h3>Employee List</h3>
+    <ul id="list">Loading...</ul>
+
+    <script>
+        // นี่คือ URL ที่ได้จากการ Deploy ของคุณครับ
+        const API_URL = "https://employee-api-zxoagfut3q-as.a.run.app";
+
+        async function addEmp() {
+            const nameBtn = document.querySelector('button');
+            nameBtn.innerText = "Saving...";
+            nameBtn.disabled = true;
+
+            const data = {
+                name: document.getElementById('name').value,
+                position: document.getElementById('pos').value,
+                department: document.getElementById('dept').value
+            };
+            
+            try {
+                // ยิง Request ไปที่ Cloud Run
+                const res = await fetch(`${API_URL}/employees/`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(data)
+                });
+                
+                if (!res.ok) throw new Error("Failed to save");
+                
+                // Clear form
+                document.getElementById('name').value = '';
+                document.getElementById('pos').value = '';
+                document.getElementById('dept').value = '';
+                
+                loadEmp(); // โหลดข้อมูลใหม่
+                alert("บันทึกสำเร็จ! (ข้อมูลถูกส่งไป Firestore และ Pub/Sub แล้ว)");
+            } catch (err) {
+                alert("Error: " + err.message);
+            } finally {
+                nameBtn.innerText = "Save Employee";
+                nameBtn.disabled = false;
+            }
+        }
+
+        async function loadEmp() {
+            try {
+                const res = await fetch(`${API_URL}/employees/`);
+                const data = await res.json();
+                
+                const list = document.getElementById('list');
+                list.innerHTML = data.length ? '' : '<li>No employees found.</li>';
+                
+                data.forEach(e => {
+                    list.innerHTML += `<li><strong>${e.name}</strong> - ${e.position} <span style="color:gray">(${e.department})</span></li>`;
+                });
+            } catch (err) {
+                document.getElementById('list').innerHTML = `<li style="color:red">Error connecting to backend: ${err.message}</li>`;
+            }
+        }
+
+        loadEmp();
+    </script>
+</body>
+</html>
