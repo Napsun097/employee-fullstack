@@ -1,3 +1,11 @@
+terraform {
+  backend "gcs" {
+    # ชื่อถังข้อมูลที่จะเก็บ State (ต้องสร้างถังนี้ก่อน เดี๋ยวมีวิธีทำด้านล่าง)
+    bucket  = "tf-state-employee-manager-486518" 
+    prefix  = "terraform/state"
+  }
+}
+
 provider "google" {
   project = "employee-manager-486518"
   region  = "asia-southeast1"
