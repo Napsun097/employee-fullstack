@@ -30,6 +30,7 @@ class Employee(BaseModel):
     name: str
     position: str
     department: str
+    salary: int
 
 
 # --- Category I: Concurrency & Async ---

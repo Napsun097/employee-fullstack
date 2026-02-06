@@ -21,6 +21,7 @@
         <input id="name" placeholder="Name (ชื่อ-นามสกุล)">
         <input id="pos" placeholder="Position (ตำแหน่ง)">
         <input id="dept" placeholder="Department (แผนก)">
+        <input id="salary" type="number" placeholder="Salary (เงินเดือน)">
         <button onclick="addEmp()">Save Employee</button>
     </div>
 
@@ -39,7 +40,8 @@
             const data = {
                 name: document.getElementById('name').value,
                 position: document.getElementById('pos').value,
-                department: document.getElementById('dept').value
+                department: document.getElementById('dept').value,
+                salary: parseInt(document.getElementById('salary').value) || 0
             };
             
             try {
@@ -56,6 +58,7 @@
                 document.getElementById('name').value = '';
                 document.getElementById('pos').value = '';
                 document.getElementById('dept').value = '';
+                document.getElementById('salary').value = '';
                 
                 loadEmp(); // โหลดข้อมูลใหม่
                 alert("บันทึกสำเร็จ! (ข้อมูลถูกส่งไป Firestore และ Pub/Sub แล้ว)");
@@ -79,7 +82,8 @@
                     list.innerHTML += `
                         <li>
                             <div>
-                                <strong>${e.name}</strong> - ${e.position} <span style="color:gray">(${e.department})</span>
+                                <strong>${e.name}</strong> - ${e.position} 
+                                <span style="color:gray">(${e.department})</span> - เงินเดือน ${e.salary ? e.salary.toLocaleString() : '0'} บาท
                             </div>
                             <button onclick="deleteEmp('${e.id}')"
                                 style="width: auto; background-color: #dc3545; padding: 5px 10px; font-size: 12px;">
