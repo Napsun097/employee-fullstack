@@ -76,13 +76,39 @@
                 list.innerHTML = data.length ? '' : '<li>No employees found.</li>';
                 
                 data.forEach(e => {
-                    list.innerHTML += `<li><strong>${e.name}</strong> - ${e.position} <span style="color:gray">(${e.department})</span></li>`;
+                    list.innerHTML += `
+                        <li>
+                            <div>
+                                <strong>${e.name}</strong> - ${e.position} <span style="color:gray">(${e.department})</span>
+                            </div>
+                            <button onclick="deleteEmp('${e.id}')"
+                                style="width: auto; background-color: #dc3545; padding: 5px 10px; font-size: 12px;">
+                                Delete
+                            </button>
+                        </li>`;
                 });
             } catch (err) {
                 document.getElementById('list').innerHTML = `<li style="color:red">Error connecting to backend: ${err.message}</li>`;
             }
         }
 
+        async function deleteEmp(id) {
+            if (!confirm("คุณแน่ใจใช่ไหมที่จะลบพนักงานคนนี้?")) return;
+
+            try {
+                const res = await fetch(`${API_URL}/employees/${id}`, {
+                    method: 'DELETE'
+                });
+
+                if (!res.ok) throw new Error("Failed to delete");
+
+                alert("ลบข้อมูลสำเร็จ");
+                loadEmp(); 
+            } catch (err) {
+                alert("Error: " + err.message);
+            }
+        }
+        
         loadEmp();
     </script>
 </body>

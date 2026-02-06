@@ -24,11 +24,13 @@ db = firestore.Client(project=PROJECT_ID)
 publisher = pubsub_v1.PublisherClient()
 topic_path = publisher.topic_path(PROJECT_ID, TOPIC_ID)
 
+
 # Model สำหรับรับค่า
 class Employee(BaseModel):
     name: str
     position: str
     department: str
+
 
 # --- Category I: Concurrency & Async ---
 # ใช้ async def เพื่อรองรับ Request พร้อมกันได้จำนวนมาก
@@ -51,9 +53,24 @@ async def create_employee(emp: Employee):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/employees/")
 async def get_employees():
     # ดึงข้อมูลมาแสดง
     users_ref = db.collection("employees")
     docs = users_ref.stream()
     return [{"id": doc.id, **doc.to_dict()} for doc in docs]
+
+
+@app.delete("/employees/{emp_id}")
+async def delete_employee(emp_id: str):
+    try:
+        # อ้างอิงถึงเอกสาร (Document) ตาม ID ที่ส่งมา
+        doc_ref = db.collection("employees").document(emp_id)
+
+        # ทำการลบ
+        doc_ref.delete()
+
+        return {"message": f"Employee {emp_id} deleted successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
