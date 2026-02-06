@@ -2,118 +2,138 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Employee Manager</title>
+    <title>Employee Manager (Secure)</title>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    
     <style>
-        body { font-family: sans-serif; max-width: 600px; margin: 2rem auto; padding: 0 1rem; }
+        body { font-family: sans-serif; max-width: 600px; margin: 2rem auto; padding: 0 {1rem; }
         input, button { padding: 10px; margin: 5px 0; width: 100%; box-sizing: border-box; }
-        button { background-color: #007bff; color: white; border: none; cursor: pointer; }
+        button { background-color: #007bff; color: white; border: none; cursor: pointer; border-radius: 4px; }
         button:hover { background-color: #0056b3; }
-        li { background: #f9f9f9; border-bottom: 1px solid #ddd; padding: 10px; list-style: none; }
-        ul { padding: 0; }
+        li { background: #f9f9f9; border-bottom: 1px solid #ddd; padding: 10px; list-style: none; display: flex; justify-content: space-between; align-items: center;}
+        
+        .hidden { display: none !important; } /* คลาสสำหรับซ่อนเนื้อหา */
+        #user-info { display: flex; align-items: center; justify-content: space-between; background: #f0f0f0; padding: 10px; border-radius: 5px; margin-bottom: 20px; }
+        #user-info img { width: 32px; border-radius: 50%; vertical-align: middle; margin-right: 8px; }
+        .login-card { text-align: center; padding: 40px; border: 1px solid #ddd; border-radius: 8px; margin-top: 50px; }
     </style>
 </head>
 <body>
-    <h1>Employee Manager (Full Stack)</h1>
-    <p>Backend URL: <span style="color:green; font-weight:bold;">https://employee-api-zxoagfut3q-as.a.run.app</span></p>
-    
-    <div style="background: #eee; padding: 20px; border-radius: 8px;">
-        <h3>Add New Employee</h3>
-        <input id="name" placeholder="Name (ชื่อ-นามสกุล)">
-        <input id="pos" placeholder="Position (ตำแหน่ง)">
-        <input id="dept" placeholder="Department (แผนก)">
-        <input id="salary" type="number" placeholder="Salary (เงินเดือน)">
-        <button onclick="addEmp()">Save Employee</button>
+    <h1>Employee Manager</h1>
+
+    <div id="login-section" class="login-card">
+        <h3>กรุณาเข้าสู่ระบบด้วย Google</h3>
+        <p>เพื่อความปลอดภัย กรุณา Login ก่อนเข้าจัดการข้อมูล</p>
+        <button onclick="login()" style="background-color: #4285F4; width: auto; padding: 10px 20px;">
+            Sign in with Google
+        </button>
     </div>
 
-    <h3>Employee List</h3>
-    <ul id="list">Loading...</ul>
+    <div id="main-content" class="hidden">
+        <div id="user-info">
+            <span><img id="user-pic" src=""> <strong id="user-name"></strong></span>
+            <button onclick="logout()" style="width: auto; background: #6c757d; padding: 5px 10px; font-size: 12px;">Logout</button>
+        </div>
+
+        <div style="background: #eee; padding: 20px; border-radius: 8px;">
+            <h3>Add New Employee</h3>
+            <input id="name" placeholder="Name (ชื่อ-นามสกุล)">
+            <input id="pos" placeholder="Position (ตำแหน่ง)">
+            <input id="dept" placeholder="Department (แผนก)">
+            <input id="salary" type="number" placeholder="Salary (เงินเดือน)">
+            <button id="save-btn" onclick="addEmp()">Save Employee</button>
+        </div>
+
+        <h3>Employee List</h3>
+        <ul id="list">Loading...</ul>
+    </div>
 
     <script>
-        // นี่คือ URL ที่ได้จากการ Deploy ของคุณครับ
+        // ใช้ค่า Config ของโปรเจกต์คุณโดยเฉพาะ
+        const firebaseConfig = {
+            apiKey: "AIzaSyDR8bSpWUrBaThwaC1SGQmw0PfMot623Ko",
+            authDomain: "employee-manager-486518.firebaseapp.com",
+            projectId: "employee-manager-486518",
+            storageBucket: "employee-manager-486518.firebasestorage.app",
+            messagingSenderId: "803405278074",
+            appId: "1:803405278074:web:18bdbc96990fa67e5f04c3"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const provider = new firebase.auth.GoogleAuthProvider();
         const API_URL = "https://employee-api-zxoagfut3q-as.a.run.app";
 
-        async function addEmp() {
-            const nameBtn = document.querySelector('button');
-            nameBtn.innerText = "Saving...";
-            nameBtn.disabled = true;
+        // ระบบเช็คสถานะการเข้าสู่ระบบ
+        auth.onAuthStateChanged(user => {
+            const loginSection = document.getElementById('login-section');
+            const mainContent = document.getElementById('main-content');
+            if (user) {
+                loginSection.classList.add('hidden');
+                mainContent.classList.remove('hidden');
+                document.getElementById('user-name').innerText = user.displayName;
+                document.getElementById('user-pic').src = user.photoURL;
+                loadEmp(); 
+            } else {
+                loginSection.classList.remove('hidden');
+                mainContent.classList.add('hidden');
+            }
+        });
 
+        function login() { auth.signInWithPopup(provider).catch(err => alert(err.message)); }
+        function logout() { auth.signOut(); }
+
+        async function addEmp() {
+            const btn = document.getElementById('save-btn');
+            btn.innerText = "Saving..."; btn.disabled = true;
             const data = {
                 name: document.getElementById('name').value,
                 position: document.getElementById('pos').value,
                 department: document.getElementById('dept').value,
                 salary: parseInt(document.getElementById('salary').value) || 0
             };
-            
             try {
-                // ยิง Request ไปที่ Cloud Run
                 const res = await fetch(`${API_URL}/employees/`, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify(data)
                 });
-                
-                if (!res.ok) throw new Error("Failed to save");
-                
-                // Clear form
-                document.getElementById('name').value = '';
-                document.getElementById('pos').value = '';
-                document.getElementById('dept').value = '';
-                document.getElementById('salary').value = '';
-                
-                loadEmp(); // โหลดข้อมูลใหม่
-                alert("บันทึกสำเร็จ! (ข้อมูลถูกส่งไป Firestore และ Pub/Sub แล้ว)");
-            } catch (err) {
-                alert("Error: " + err.message);
-            } finally {
-                nameBtn.innerText = "Save Employee";
-                nameBtn.disabled = false;
-            }
+                if (res.ok) { 
+                    alert("บันทึกสำเร็จ!"); 
+                    document.getElementById('name').value = '';
+                    document.getElementById('pos').value = '';
+                    document.getElementById('dept').value = '';
+                    document.getElementById('salary').value = '';
+                    loadEmp(); 
+                }
+            } catch (err) { alert(err.message); }
+            finally { btn.innerText = "Save Employee"; btn.disabled = false; }
         }
 
         async function loadEmp() {
             try {
                 const res = await fetch(`${API_URL}/employees/`);
                 const data = await res.json();
-                
                 const list = document.getElementById('list');
                 list.innerHTML = data.length ? '' : '<li>No employees found.</li>';
-                
                 data.forEach(e => {
+                    // แก้จุด e.salary undefined เพื่อไม่ให้หน้าเว็บพัง
+                    const sal = (e.salary !== undefined && e.salary !== null) ? e.salary.toLocaleString() : '0';
                     list.innerHTML += `
                         <li>
-                            <div>
-                                <strong>${e.name}</strong> - ${e.position} 
-                                <span style="color:gray">(${e.department})</span> - เงินเดือน ${e.salary ? e.salary.toLocaleString() : '0'} บาท
-                            </div>
-                            <button onclick="deleteEmp('${e.id}')"
-                                style="width: auto; background-color: #dc3545; padding: 5px 10px; font-size: 12px;">
-                                Delete
-                            </button>
+                            <div><strong>${e.name}</strong> - ${e.position} <small>(${e.department})</small><br> เงินเดือน ${sal} บาท</div>
+                            <button onclick="deleteEmp('${e.id}')" style="width: auto; background-color: #dc3545; padding: 5px 10px; font-size: 12px;">Delete</button>
                         </li>`;
                 });
-            } catch (err) {
-                document.getElementById('list').innerHTML = `<li style="color:red">Error connecting to backend: ${err.message}</li>`;
-            }
+            } catch (err) { console.error(err); }
         }
 
         async function deleteEmp(id) {
-            if (!confirm("คุณแน่ใจใช่ไหมที่จะลบพนักงานคนนี้?")) return;
-
-            try {
-                const res = await fetch(`${API_URL}/employees/${id}`, {
-                    method: 'DELETE'
-                });
-
-                if (!res.ok) throw new Error("Failed to delete");
-
-                alert("ลบข้อมูลสำเร็จ");
-                loadEmp(); 
-            } catch (err) {
-                alert("Error: " + err.message);
+            if (confirm("คุณแน่ใจใช่ไหมที่จะลบพนักงานคนนี้?")) {
+                await fetch(`${API_URL}/employees/${id}`, { method: 'DELETE' });
+                loadEmp();
             }
         }
-        
-        loadEmp();
     </script>
 </body>
 </html>
