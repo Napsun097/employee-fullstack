@@ -1,77 +1,62 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from google.cloud import firestore, pubsub_v1
-import os
-import asyncio
+from google.cloud import firestore
 
+# เริ่มต้นแอป
 app = FastAPI()
 
+# ตั้งค่า CORS (เพื่อให้ Frontend เรียก API ข้าม Domain ได้)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # อนุญาตทุกเว็บ (เพื่อให้ง่ายต่อการ dev)
+    allow_origins=["*"],  # ยอมรับทุกเว็บ (เพื่อความง่ายในการทดสอบ)
     allow_credentials=True,
-    allow_methods=["*"],  # อนุญาตทุก Method (GET, POST, etc.)
-    allow_headers=["*"],  # อนุญาตทุก Header
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-# ตั้งค่า Google Cloud Project ID
-PROJECT_ID = os.getenv("GCP_PROJECT_ID")
-TOPIC_ID = "new-employee-topic"
+# เชื่อมต่อ Firestore
+db = firestore.Client()
 
-# Connect Services
-db = firestore.Client(project=PROJECT_ID)
-publisher = pubsub_v1.PublisherClient()
-topic_path = publisher.topic_path(PROJECT_ID, TOPIC_ID)
-
-
-# Model สำหรับรับค่า
+# Model ข้อมูล (ต้องตรงกับที่ Frontend ส่งมา)
 class Employee(BaseModel):
     name: str
     position: str
     department: str
     salary: int
 
+@app.get("/")
+def read_root():
+    return {"message": "Employee API is running!"}
 
-# --- Category I: Concurrency & Async ---
-# ใช้ async def เพื่อรองรับ Request พร้อมกันได้จำนวนมาก
+# --- 1. ดึงข้อมูลทั้งหมด (Read) ---
+@app.get("/employees/")
+def get_employees():
+    employees = []
+    docs = db.collection("employees").stream()
+    for doc in docs:
+        emp = doc.to_dict()
+        emp["id"] = doc.id
+        employees.append(emp)
+    return employees
+
+# --- 2. เพิ่มข้อมูลใหม่ (Create) ---
 @app.post("/employees/")
 async def create_employee(emp: Employee):
-    try:
-        # 1. Save to Firestore
-        doc_ref = db.collection("employees").document()
-        emp_data = emp.dict()
-        doc_ref.set(emp_data)
+    # .add() จะสร้าง ID ให้อัตโนมัติ
+    update_time, emp_ref = db.collection("employees").add(emp.dict())
+    return {"id": emp_ref.id, "message": "Created successfully"}
 
-        # 2. --- Category IV: Pub/Sub ---
-        # ส่งข้อมูลเข้า Queue เพื่อไปประมวลผลต่อ (เช่น ส่งเมล/คำนวณเงิน)
-        # การทำแบบนี้ทำให้ระบบไม่ค้าง (Non-blocking)
-        data_str = f"New employee created: {emp.name}".encode("utf-8")
-        future = publisher.publish(topic_path, data_str)
-        print(f"Published message ID: {future.result()}")
+# --- 3. แก้ไขข้อมูล (Update) - [ส่วนที่เพิ่มใหม่] ---
+@app.put("/employees/{emp_id}")
+async def update_employee(emp_id: str, emp: Employee):
+    # .set() จะเขียนทับข้อมูลเดิมตาม ID ที่ระบุ
+    doc_ref = db.collection("employees").document(emp_id)
+    doc_ref.set(emp.dict())
+    return {"id": emp_id, "message": "Updated successfully"}
 
-        return {"id": doc_ref.id, "message": "Saved and queued"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/employees/")
-async def get_employees():
-    # ดึงข้อมูลมาแสดง
-    users_ref = db.collection("employees")
-    docs = users_ref.stream()
-    return [{"id": doc.id, **doc.to_dict()} for doc in docs]
-
-
+# --- 4. ลบข้อมูล (Delete) ---
 @app.delete("/employees/{emp_id}")
 async def delete_employee(emp_id: str):
-    try:
-        # อ้างอิงถึงเอกสาร (Document) ตาม ID ที่ส่งมา
-        doc_ref = db.collection("employees").document(emp_id)
-
-        # ทำการลบ
-        doc_ref.delete()
-
-        return {"message": f"Employee {emp_id} deleted successfully"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    db.collection("employees").document(emp_id).delete()
+    return {"message": "Deleted successfully"}
