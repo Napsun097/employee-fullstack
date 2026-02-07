@@ -1,35 +1,58 @@
-from fastapi import FastAPI, HTTPException
+import firebase_admin
+from firebase_admin import credentials, auth
+from fastapi import FastAPI, HTTPException, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from google.cloud import firestore
 
-# เริ่มต้นแอป
-app = FastAPI()
+# --- 1. เริ่มต้นระบบ Firebase Admin (ยามเฝ้าประตู) ---
+# ใช้ try-except เพื่อกัน Error กรณีมีการ Reload App
+try:
+    firebase_admin.get_app()
+except ValueError:
+    firebase_admin.initialize_app()
 
-# ตั้งค่า CORS (เพื่อให้ Frontend เรียก API ข้าม Domain ได้)
+app = FastAPI()
+db = firestore.Client()
+
+# --- 2. ตั้งค่า CORS (รั้วบ้าน) ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # ยอมรับทุกเว็บ (เพื่อความง่ายในการทดสอบ)
+    allow_origins=["https://employee-manager-486518.web.app"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# เชื่อมต่อ Firestore
-db = firestore.Client()
-
-# Model ข้อมูล (ต้องตรงกับที่ Frontend ส่งมา)
+# Model ข้อมูล
 class Employee(BaseModel):
     name: str
     position: str
     department: str
     salary: int
 
+# --- 3. ฟังก์ชันตรวจสอบสิทธิ์ (Security Check) ---
+async def verify_token(authorization: str = Header(...)):
+    """
+    ฟังก์ชันนี้จะดึง Token จาก Header 'Authorization' 
+    และตรวจสอบกับ Firebase ว่าเป็นของจริงหรือไม่
+    """
+    try:
+        # รับค่ามาในรูปแบบ "Bearer <token>" ต้องตัดคำว่า Bearer ออก
+        token = authorization.split(" ")[1]
+        decoded_token = auth.verify_id_token(token)
+        return decoded_token # ถ้าผ่าน ให้คืนค่าข้อมูล User กลับไป
+    except Exception as e:
+        # ถ้าไม่ผ่าน (Token ปลอม หรือ หมดอายุ) ให้ดีดออกทันที
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
 @app.get("/")
 def read_root():
-    return {"message": "Employee API is running!"}
+    return {"message": "Secure Employee API is running!"}
 
-# --- 1. ดึงข้อมูลทั้งหมด (Read) ---
+# --- 4. API Endpoints (ล็อกกุญแจเฉพาะจุดที่สำคัญ) ---
+
+# ดึงข้อมูล (GET): อนุญาตให้ทุกคนดูได้ (หรือจะใส่ verify_token ก็ได้ถ้าอยากปิด)
 @app.get("/employees/")
 def get_employees():
     employees = []
@@ -40,23 +63,21 @@ def get_employees():
         employees.append(emp)
     return employees
 
-# --- 2. เพิ่มข้อมูลใหม่ (Create) ---
+# เพิ่มข้อมูล (POST): **ต้องมี Token**
 @app.post("/employees/")
-async def create_employee(emp: Employee):
-    # .add() จะสร้าง ID ให้อัตโนมัติ
+async def create_employee(emp: Employee, user=Depends(verify_token)):
     update_time, emp_ref = db.collection("employees").add(emp.dict())
     return {"id": emp_ref.id, "message": "Created successfully"}
 
-# --- 3. แก้ไขข้อมูล (Update) - [ส่วนที่เพิ่มใหม่] ---
+# แก้ไขข้อมูล (PUT): **ต้องมี Token**
 @app.put("/employees/{emp_id}")
-async def update_employee(emp_id: str, emp: Employee):
-    # .set() จะเขียนทับข้อมูลเดิมตาม ID ที่ระบุ
+async def update_employee(emp_id: str, emp: Employee, user=Depends(verify_token)):
     doc_ref = db.collection("employees").document(emp_id)
     doc_ref.set(emp.dict())
     return {"id": emp_id, "message": "Updated successfully"}
 
-# --- 4. ลบข้อมูล (Delete) ---
+# ลบข้อมูล (DELETE): **ต้องมี Token**
 @app.delete("/employees/{emp_id}")
-async def delete_employee(emp_id: str):
+async def delete_employee(emp_id: str, user=Depends(verify_token)):
     db.collection("employees").document(emp_id).delete()
     return {"message": "Deleted successfully"}

@@ -3,20 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Employee Manager (Full Stack)</title>
+    <title>Employee Manager</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
-    
     <script src="/__/firebase/init.js"></script>
-
 </head>
 <body class="bg-light">
 
     <div class="container mt-5">
-        <h2 class="text-center mb-4">Employee Management System</h2>
+        <h2 class="text-center mb-4">Employee Management</h2>
 
         <div id="login-section" class="text-center">
+            <div class="alert alert-info">กรุณา Login ก่อนจัดการข้อมูล</div>
             <button onclick="login()" class="btn btn-primary btn-lg">Sign in with Google</button>
         </div>
 
@@ -24,36 +23,18 @@
             <div class="card p-4 mb-4">
                 <h4>Manage Employee</h4>
                 <div class="row g-3">
-                    <div class="col-md-3">
-                        <input type="text" id="name" class="form-control" placeholder="Name">
-                    </div>
-                    <div class="col-md-3">
-                        <input type="text" id="pos" class="form-control" placeholder="Position">
-                    </div>
-                    <div class="col-md-3">
-                        <input type="text" id="dept" class="form-control" placeholder="Department">
-                    </div>
-                    <div class="col-md-2">
-                        <input type="number" id="salary" class="form-control" placeholder="Salary">
-                    </div>
-                    <div class="col-md-1">
-                        <button onclick="saveEmp()" id="save-btn" class="btn btn-success w-100">Save</button>
-                    </div>
-                    <div class="col-md-12 text-end">
-                         <button onclick="resetForm()" class="btn btn-secondary btn-sm">Clear Form</button>
-                    </div>
+                    <div class="col-md-3"><input type="text" id="name" class="form-control" placeholder="Name"></div>
+                    <div class="col-md-3"><input type="text" id="pos" class="form-control" placeholder="Position"></div>
+                    <div class="col-md-3"><input type="text" id="dept" class="form-control" placeholder="Department"></div>
+                    <div class="col-md-2"><input type="number" id="salary" class="form-control" placeholder="Salary"></div>
+                    <div class="col-md-1"><button onclick="saveEmp()" id="save-btn" class="btn btn-success w-100">Save</button></div>
+                    <div class="col-md-12 text-end"><button onclick="resetForm()" class="btn btn-secondary btn-sm">Clear Form</button></div>
                 </div>
             </div>
 
             <table class="table table-bordered table-hover bg-white">
                 <thead class="table-dark">
-                    <tr>
-                        <th>Name</th>
-                        <th>Position</th>
-                        <th>Department</th>
-                        <th>Salary</th>
-                        <th>Actions</th>
-                    </tr>
+                    <tr><th>Name</th><th>Position</th><th>Department</th><th>Salary</th><th>Actions</th></tr>
                 </thead>
                 <tbody id="emp-list"></tbody>
             </table>
@@ -63,138 +44,140 @@
     </div>
 
     <script>
+        // ⚠️ แก้ URL นี้ให้เป็นของ Cloud Run คุณ ⚠️
         const API_URL = "https://employee-api-zxoagfut3q-as.a.run.app"; 
 
-        // ตัวแปรสำหรับเช็คสถานะ Edit
         let editMode = false;
         let editId = null;
 
-        // --- Firebase Config (ใส่ค่า Config ของคุณเองตรงนี้ ถ้ายังไม่มี) ---
-        // (ปกติ Firebase Hosting จะจัดการให้อัตโนมัติ แต่ใส่ไว้กันเหนียวได้)
-        const firebaseConfig = {
-            // ... copy จาก Firebase Console มาใส่ถ้าจำเป็น ...
-        };
-        // firebase.initializeApp(firebaseConfig); // เปิดบรรทัดนี้ถ้าใช้ config manual
-
+        // --- Auth Logic ---
         function login() {
             const provider = new firebase.auth.GoogleAuthProvider();
             firebase.auth().signInWithPopup(provider)
-                .then(result => {
-                    document.getElementById('login-section').style.display = 'none';
-                    document.getElementById('app-section').style.display = 'block';
-                    loadEmp(); // โหลดข้อมูลเมื่อ Login ผ่าน
-                })
-                .catch(error => alert(error.message));
+                .then(() => {
+                    checkAuthState();
+                }).catch(err => alert(err.message));
         }
 
         function logout() {
-            firebase.auth().signOut().then(() => {
-                location.reload();
-            });
+            firebase.auth().signOut().then(() => location.reload());
         }
 
-        // --- ฟังก์ชันโหลดข้อมูล (READ) ---
+        // ตรวจสอบสถานะและโหลดข้อมูล
+        function checkAuthState() {
+            firebase.auth().onAuthStateChanged(user => {
+                if (user) {
+                    document.getElementById('login-section').style.display = 'none';
+                    document.getElementById('app-section').style.display = 'block';
+                    loadEmp();
+                } else {
+                    document.getElementById('login-section').style.display = 'block';
+                    document.getElementById('app-section').style.display = 'none';
+                }
+            });
+        }
+        checkAuthState(); // รันตอนเปิดเว็บ
+
+        // --- Helper: ขอ Token จาก Firebase ---
+        async function getAuthToken() {
+            const user = firebase.auth().currentUser;
+            if (user) {
+                return await user.getIdToken();
+            } else {
+                alert("กรุณา Login ใหม่");
+                return null;
+            }
+        }
+
+        // --- CRUD Logic ---
         async function loadEmp() {
             const res = await fetch(`${API_URL}/employees/`);
             const data = await res.json();
             const list = document.getElementById('emp-list');
             list.innerHTML = '';
-
             data.forEach(e => {
                 list.innerHTML += `
                     <tr>
-                        <td>${e.name}</td>
-                        <td>${e.position}</td>
-                        <td>${e.department}</td>
-                        <td>${e.salary}</td>
+                        <td>${e.name}</td><td>${e.position}</td><td>${e.department}</td><td>${e.salary}</td>
                         <td>
-                            <button onclick="editEmp('${e.id}', '${e.name}', '${e.position}', '${e.department}', ${e.salary})" 
-                                class="btn btn-warning btn-sm">Edit</button>
-                            
-                            <button onclick="deleteEmp('${e.id}')" 
-                                class="btn btn-danger btn-sm">Delete</button>
+                            <button onclick="editEmp('${e.id}', '${e.name}', '${e.position}', '${e.department}', ${e.salary})" class="btn btn-warning btn-sm">Edit</button>
+                            <button onclick="deleteEmp('${e.id}')" class="btn btn-danger btn-sm">Delete</button>
                         </td>
-                    </tr>
-                `;
+                    </tr>`;
             });
         }
 
-        // --- ฟังก์ชันเตรียมแก้ไข (ยัดข้อมูลลงฟอร์ม) ---
-        function editEmp(id, name, pos, dept, salary) {
-            document.getElementById('name').value = name;
-            document.getElementById('pos').value = pos;
-            document.getElementById('dept').value = dept;
-            document.getElementById('salary').value = salary;
-
-            // เปลี่ยนปุ่มเป็นโหมดแก้ไข
-            const btn = document.getElementById('save-btn');
-            btn.innerText = "Update";
-            btn.classList.remove('btn-success');
-            btn.classList.add('btn-warning');
-
-            editMode = true;
-            editId = id;
-        }
-
-        // --- ฟังก์ชันบันทึก (รองรับทั้ง Create และ Update) ---
         async function saveEmp() {
             const name = document.getElementById('name').value;
             const position = document.getElementById('pos').value;
             const department = document.getElementById('dept').value;
             const salary = parseInt(document.getElementById('salary').value);
 
-            if (!name || !salary) {
-                alert("กรุณากรอกชื่อและเงินเดือน");
-                return;
-            }
+            // 1. ขอ Token
+            const token = await getAuthToken();
+            if (!token) return;
 
-            const empData = { name, position, department, salary };
-            
-            // เช็คว่าจะ POST (ใหม่) หรือ PUT (แก้ไข)
             const method = editMode ? 'PUT' : 'POST';
             const url = editMode ? `${API_URL}/employees/${editId}` : `${API_URL}/employees/`;
 
             try {
                 const res = await fetch(url, {
                     method: method,
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(empData)
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}` // 2. แนบ Token ไปด้วย
+                    },
+                    body: JSON.stringify({ name, position, department, salary })
                 });
 
                 if (res.ok) {
-                    alert(editMode ? "แก้ไขเรียบร้อย!" : "บันทึกสำเร็จ!");
-                    resetForm(); // ล้างค่า
-                    loadEmp();   // โหลดตารางใหม่
+                    alert("บันทึกข้อมูลสำเร็จ!");
+                    resetForm();
+                    loadEmp();
                 } else {
-                    alert("เกิดข้อผิดพลาดในการบันทึก");
+                    alert("บันทึกไม่สำเร็จ (อาจไม่มีสิทธิ์)");
                 }
-            } catch (err) {
-                console.error(err);
-                alert("Error connecting to API");
-            }
+            } catch (err) { console.error(err); alert("Error connecting API"); }
         }
 
-        // --- ฟังก์ชันลบข้อมูล (DELETE) ---
         async function deleteEmp(id) {
-            if (confirm('ยืนยันที่จะลบข้อมูลนี้?')) {
-                await fetch(`${API_URL}/employees/${id}`, { method: 'DELETE' });
+            if (confirm('ยืนยันลบข้อมูล?')) {
+                // 1. ขอ Token
+                const token = await getAuthToken();
+                if (!token) return;
+
+                await fetch(`${API_URL}/employees/${id}`, { 
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` } // 2. แนบ Token
+                });
                 loadEmp();
             }
         }
 
-        // --- ฟังก์ชันล้างฟอร์ม ---
+        function editEmp(id, name, pos, dept, salary) {
+            document.getElementById('name').value = name;
+            document.getElementById('pos').value = pos;
+            document.getElementById('dept').value = dept;
+            document.getElementById('salary').value = salary;
+            
+            const btn = document.getElementById('save-btn');
+            btn.innerText = "Update";
+            btn.classList.replace('btn-success', 'btn-warning');
+            
+            editMode = true;
+            editId = id;
+        }
+
         function resetForm() {
             document.getElementById('name').value = '';
             document.getElementById('pos').value = '';
             document.getElementById('dept').value = '';
             document.getElementById('salary').value = '';
-
-            // คืนค่าปุ่มกลับเป็นโหมดปกติ
+            
             const btn = document.getElementById('save-btn');
             btn.innerText = "Save";
-            btn.classList.remove('btn-warning');
-            btn.classList.add('btn-success');
-
+            btn.classList.replace('btn-warning', 'btn-success');
+            
             editMode = false;
             editId = null;
         }
