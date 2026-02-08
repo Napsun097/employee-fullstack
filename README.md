@@ -1,8 +1,8 @@
-# 🚀 Employee Manager (Full-Stack Cloud Native)
+#Employee Manager (Full-Stack Cloud Native)
 
 ระบบจัดการพนักงานแบบครบวงจร พัฒนาด้วยสถาปัตยกรรม Cloud Native บน Google Cloud Platform (GCP) และ Firebase รองรับการทำงานแบบ Concurrency และ Infrastructure as Code
 
-## 🏗️ Architecture & Technologies
+##Architecture & Technologies
 
 โปรเจกต์นี้ประกอบด้วยเทคโนโลยีตามเกณฑ์มาตรฐาน:
 
@@ -14,7 +14,7 @@
 - **Containerization:** **Docker** & **Artifact Registry**
 - **CI/CD Ops:** **Cloud Build** & **Makefile**
 
-## 📂 Project Structure
+##Project Structure
 
 ```bash
 ├── backend/            # Python FastAPI Source Code & Dockerfile
